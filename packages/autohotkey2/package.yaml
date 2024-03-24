@@ -1,0 +1,19 @@
+---
+name: autohotkey2-lsp
+description: |
+  AutoHotkey v2 Language support.
+homepage: https://github.com/thqby/vscode-autohotkey2-lsp
+licenses:
+  - Apache-2.0
+languages:
+  - AutoHotkey
+categories:
+  - LSP
+
+source:
+  id: pkg:generic/autohotkey2/autohotkey2-lsp@2.4.6
+  download:
+    - target: [linux, win]
+      files:
+        ahk2-lsp.zip: https://github.com/fcying/tools/releases/download/tools/autohotkey2-lsp.zip
+
