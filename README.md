@@ -1,6 +1,6 @@
 # :coffee: mason-registry
 
-This project includes some custom lsp that is not available in the main mason-registry
+This project includes some custom lsp that is not available in the main mason-registry.  
 some lsp get from [tools](https://github.com/fcying/tools) 
 
 * [clangd with rpath lib](https://github.com/clangd/clangd)

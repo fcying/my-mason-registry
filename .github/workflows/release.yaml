@@ -2,9 +2,9 @@
 name: Release
 
 on:
+  schedule:
+  - cron: '0 18 * * *'
   push:
-    tags:
-      - "**"
     branches:
       - master
 
@@ -17,36 +17,56 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       should-release: ${{ steps.tag.outputs.should-release }}
+      clangd: ${{ steps.tag.outputs.clangd }}
+      ahk: ${{ steps.tag.outputs.ahk }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 2
-      - id: adjnoun
-        uses: mason-org/actions/adj-noun-generator@v1
       - id: tag
-        name: Get/create tag
+        name: Check version
         shell: bash
         run: |
-          if [[ $GITHUB_REF =~ ^refs/tags ]]; then
-            echo "Releasing tag $GITHUB_REF_NAME"
-            printf "tag=%s\nshould-release=true" "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
-          elif [[ $(git diff-tree --name-only --no-commit-id HEAD -- packages | wc -l) -gt 0 ]]; then
-            declare TAG
-            TAG=$(date +%Y-%m-%d)-$ADJNOUN
-            printf "tag=%s\nshould-release=true" "$TAG" >> "$GITHUB_OUTPUT"
-            echo "Tagging and pushing $TAG"
-            git tag "$TAG" HEAD
-            git push origin "$TAG"
-          else
-            echo "No tag was pushed, and no package definition was changed."
-            #echo "should-release=false" >> "$GITHUB_OUTPUT"
-            printf "tag=%s\nshould-release=true" "latest" >> "$GITHUB_OUTPUT"
+          should_release=false
+          new=$(curl https://github.com/fcying/tools/releases/tag/tools)
+          ahk=$(echo $new | grep -Po "(?<=<li>autohotkey2-lsp )\d+\.\d+\.\d+")
+          # clangd=$(echo $new | grep -Po "(?<=<li>clangd )\d+\.\d+\.\d+")
+          clangd=$(curl -sv "https://github.com/clangd/clangd/releases/latest" 2>&1 | grep -P location: | grep -Po "(\d+\.){2}\d+")
+
+          cur_clangd=$(grep -Po "(?<=clangd@)\d+\.\d+\.\d+" packages/clangd/package.yaml)
+          cur_ahk=$(grep -Po "(?<=autohotkey2-lsp@)\d+\.\d+\.\d+" packages/autohotkey2/package.yaml)
+
+          tag=$(date "+%Y%m%d")
+          if [ "$clangd" != "$cur_clangd" ]; then
+            if [ -n "$(echo $clangd | grep -P '^\d+\.\d+\.\d+$')" ]; then
+              should_release=true
+              tag="$tag-clangd"
+              sed -i "s|clangd@.*|clangd@$clangd|" packages/clangd/package.yaml
+            fi
           fi
-        env:
-          GITHUB_REF: ${{ github.ref }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
-          ADJNOUN: ${{ steps.adjnoun.outputs.word }}
+          if [ "$ahk" != "$cur_ahk" ]; then
+            if [ -n "$(echo $ahk | grep -P '^\d+\.\d+\.\d+$')" ]; then
+              should_release=true
+              tag="$tag-ahk"
+              sed -i "s|lsp@.*|lsp@$ahk|" packages/autohotkey2/package.yaml
+            fi
+          fi
+
+          echo "clangd=$clangd" >> $GITHUB_OUTPUT
+          echo "ahk=$ahk" >> $GITHUB_OUTPUT
+
+          if [ -n "$(git diff)" ]; then
+            echo "update version"
+            should_release=true
+            git config --global user.name 'actions[bot]'
+            git config --global user.email 'actions[bot]@bot.github.com'
+            git add .
+            git commit -m "$tag"
+            git push origin master
+          fi
+
+          printf "tag=%s\nshould-release=%s" $tag $should_release >> "$GITHUB_OUTPUT"
 
   release:
     needs: [tag]
@@ -58,13 +78,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - name: Delete exist tag
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITEE_KEY: ${{ secrets.GITEE_KEY }}
-        run: |
-          tag_name=${{ needs.tag.outputs.tag }}
-          gh release delete $tag_name -y || true
+        with:
+          fetch-depth: 2
       - name: Set up yq
         shell: bash
         run: |
@@ -73,15 +88,23 @@ jobs:
       - name: Compile
         shell: bash
         run: |
+          #checkout not get last version with push in tag
+          git pull --depth=2
           yq ea '[.]' -o json packages/*/package.yaml > registry.json
           zip -r registry.json.zip registry.json
           sha256sum registry.json registry.json.zip > checksums.txt
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ needs.tag.outputs.tag }}
-          fail_on_unmatched_files: true
-          generate_release_notes: false
-          files: |
-            registry.json.zip
-            checksums.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEE_KEY: ${{ secrets.GITEE_KEY }}
+        run: |
+          {
+            echo "* clangd ${{ needs.tag.outputs.clangd }} last release with rpath lib"
+            echo "* autohotkey2-lsp ${{ needs.tag.outputs.ahk }}"
+          } | tee /tmp/note.md
+          tag_name=${{ needs.tag.outputs.tag }}
+          git push origin :refs/tags/$tag_name
+          gh release delete $tag_name -y || true
+          gh release create $tag_name -t $tag_name -F "/tmp/note.md" --target $GITHUB_SHA
+          sleep 2
+          gh release upload $tag_name --clobber registry.json.zip checksums.txt
