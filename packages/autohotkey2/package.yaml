@@ -17,3 +17,6 @@ source:
       files:
         ahk2-lsp.zip: https://github.com/fcying/tools/releases/download/tools/autohotkey2-lsp.zip
 
+neovim:
+  lspconfig: autohotkey_lsp
+

@@ -12,6 +12,7 @@ categories:
   - LSP
 
 source:
+  # linux_version@0.0.0
   id: pkg:generic/c/clangd@19.1.2
   download:
     - target: linux_x64_gnu
@@ -34,3 +35,6 @@ schemas:
 
 bin:
   clangd: "{{source.download.bin}}"
+
+neovim:
+  lspconfig: clangd

@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
 
 jobs:
   tag:
@@ -18,6 +19,7 @@ jobs:
       tag: ${{ steps.tag.outputs.tag }}
       should-release: ${{ steps.tag.outputs.should-release }}
       clangd: ${{ steps.tag.outputs.clangd }}
+      clangd_lin: ${{ steps.tag.outputs.clangd_lin }}
       ahk: ${{ steps.tag.outputs.ahk }}
 
     steps:
@@ -31,13 +33,22 @@ jobs:
           should_release=false
           new=$(curl https://github.com/fcying/tools/releases/tag/tools)
           ahk=$(echo $new | grep -Po "(?<=<li>autohotkey2-lsp )\d+\.\d+\.\d+")
-          # clangd=$(echo $new | grep -Po "(?<=<li>clangd )\d+\.\d+\.\d+")
+          clangd_lin=$(echo $new | grep -Po "(?<=<li>clangd )\d+\.\d+\.\d+")
           clangd=$(curl -sv "https://github.com/clangd/clangd/releases/latest" 2>&1 | grep -P location: | grep -Po "(\d+\.){2}\d+")
 
           cur_clangd=$(grep -Po "(?<=clangd@)\d+\.\d+\.\d+" packages/clangd/package.yaml)
+          cur_clangd_lin=$(grep -Po "(?<=linux_version@)\d+\.\d+\.\d+" packages/clangd/package.yaml)
           cur_ahk=$(grep -Po "(?<=autohotkey2-lsp@)\d+\.\d+\.\d+" packages/autohotkey2/package.yaml)
 
           tag=$(date "+%Y%m%d")
+          if [[ "$clangd" != "$cur_clangd" || "$clangd_lin" != "$cur_clangd_lin" ]]; then
+            if [ -n "$(echo $clangd | grep -P '^\d+\.\d+\.\d+$')" ]; then
+              should_release=true
+              tag="$tag-clangd"
+              sed -i "s|clangd@.*|clangd@$clangd|" packages/clangd/package.yaml
+              sed -i "s|linux_version@.*|linux_version@$clangd_lin|" packages/clangd/package.yaml
+            fi
+          fi
           if [ "$clangd" != "$cur_clangd" ]; then
             if [ -n "$(echo $clangd | grep -P '^\d+\.\d+\.\d+$')" ]; then
               should_release=true
@@ -53,7 +64,14 @@ jobs:
             fi
           fi
 
+          if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
+              should_release=true
+          elif [ "$GITHUB_EVENT_NAME" == "push" ]; then
+              should_release=true
+          fi
+
           echo "clangd=$clangd" >> $GITHUB_OUTPUT
+          echo "clangd_lin=$clangd_lin" >> $GITHUB_OUTPUT
           echo "ahk=$ahk" >> $GITHUB_OUTPUT
 
           if [ -n "$(git diff)" ]; then
@@ -99,7 +117,8 @@ jobs:
           GITEE_KEY: ${{ secrets.GITEE_KEY }}
         run: |
           {
-            echo "* clangd ${{ needs.tag.outputs.clangd }} last release with rpath lib"
+            echo "* clangd ${{ needs.tag.outputs.clangd }}"
+            echo "* clangd_linux ${{ needs.tag.outputs.clangd_lin }} build with rpath lib"
             echo "* autohotkey2-lsp ${{ needs.tag.outputs.ahk }}"
           } | tee /tmp/note.md
           tag_name=${{ needs.tag.outputs.tag }}
