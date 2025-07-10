@@ -12,7 +12,7 @@ categories:
   - LSP
 
 source:
-  # linux_version@20.1.7
+  # linux_version@20.1.8
   id: pkg:generic/c/clangd@20.1.0
   download:
     - target: linux_x64_gnu
