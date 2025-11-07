@@ -11,7 +11,7 @@ categories:
   - LSP
 
 source:
-  id: pkg:generic/autohotkey2/autohotkey2-lsp@2.7.5
+  id: pkg:generic/autohotkey2/autohotkey2-lsp@2.7.6
   download:
     - target: [linux, win]
       files:
