@@ -13,7 +13,7 @@ categories:
 
 source:
   # linux_version@21.1.8
-  id: pkg:generic/c/clangd@21.1.0
+  id: pkg:generic/c/clangd@21.1.8
   download:
     - target: linux_x64_gnu
       files:
